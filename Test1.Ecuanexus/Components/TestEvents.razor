@@ -1,0 +1,35 @@
+@page "/test-events"
+
+<h3>Prueba de Eventos</h3>
+
+<div style="margin: 20px;">
+    <button @onclick="TestClick" class="btn btn-primary">Probar Click</button>
+    <button @onclick="() => counter++" class="btn btn-success">Contador: @counter</button>
+    <button @onclick="ShowMessage" class="btn btn-warning">Mostrar Mensaje</button>
+</div>
+
+@if (showMessage)
+{
+    <div class="alert alert-info">
+        ¡El evento funcionó correctamente!
+    </div>
+}
+
+@code {
+    private int counter = 0;
+    private bool showMessage = false;
+
+    private void TestClick()
+    {
+        Console.WriteLine("[TestEvents] Botón clickeado");
+        showMessage = true;
+        StateHasChanged();
+    }
+
+    private void ShowMessage()
+    {
+        Console.WriteLine("[TestEvents] Mostrando mensaje");
+        showMessage = !showMessage;
+        StateHasChanged();
+    }
+} 

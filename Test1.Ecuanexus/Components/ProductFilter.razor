@@ -1,0 +1,80 @@
+﻿@using Microsoft.AspNetCore.Components
+@using System.Threading
+
+<div class="search-container">
+    <input value="@searchValue"
+           @oninput="OnInputChanged"
+           @onkeydown="OnKeyDown"
+           placeholder="Buscar productos..."
+           class="search-input" />
+    <button @onclick="OnSearchClicked" class="btn btn-primary" style="margin-left: 5px;">
+        Buscar
+    </button>
+</div>
+@code {
+    private string searchValue = string.Empty;
+    private Timer? debounceTimer;
+
+    [Parameter]
+    public string SearchTerm { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SearchTermChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnSearch { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (searchValue != SearchTerm)
+        {
+            searchValue = SearchTerm;
+        }
+    }
+
+    private async Task OnInputChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? string.Empty;
+        searchValue = value;
+
+        Console.WriteLine($"[ProductFilter] OnInputChanged llamado con valor: '{value}'");
+
+        // Actualizar el SearchTerm
+        await SearchTermChanged.InvokeAsync(value);
+
+        // Cancelar el timer anterior
+        debounceTimer?.Dispose();
+
+        // Crear nuevo timer para debounce
+        debounceTimer = new Timer(async _ =>
+        {
+            Console.WriteLine($"[ProductFilter] Timer ejecutado, invocando OnSearch con valor: '{value}'");
+            await InvokeAsync(async () =>
+            {
+                await OnSearch.InvokeAsync(value);
+            });
+        }, null, 500, Timeout.Infinite);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            Console.WriteLine("[ProductFilter] Enter presionado, invocando OnSearch");
+            debounceTimer?.Dispose(); // Opcional: cancelar debounce
+            await OnSearch.InvokeAsync(searchValue);
+        }
+    }
+
+    private async Task OnSearchClicked()
+    {
+        Console.WriteLine("[ProductFilter] Botón Buscar presionado, invocando OnSearch");
+        debounceTimer?.Dispose(); // Opcional: cancelar debounce
+        await OnSearch.InvokeAsync(searchValue);
+    }
+
+    public void Dispose()
+    {
+        debounceTimer?.Dispose();
+    }
+}

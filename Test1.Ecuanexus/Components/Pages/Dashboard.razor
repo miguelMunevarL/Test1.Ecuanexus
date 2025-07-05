@@ -1,0 +1,246 @@
+﻿@page "/dashboard"
+@using Test1.Ecuanexus.Client.Models
+@using Test1.Ecuanexus.Services
+@using Test1.Ecuanexus.Components
+@inject ProductService ProductService
+@inject IJSRuntime JS
+
+@implements IDisposable
+
+<PageTitle>Dashboard de Inventario</PageTitle>
+<h1>Dashboard de Inventario</h1>
+
+@if (isLoading)
+{
+    <div class="loading-spinner">Cargando productos...</div>
+}
+else
+{
+
+    <ProductFilter SearchTerm="@searchTerm"
+        SearchTermChanged="@(async (string t) => { searchTerm = t; await HandleSearch(t); })" OnSearch="HandleSearch" />
+
+    @if (products?.Any() == true)
+    {
+        <table class="product-table">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>SKU</th>
+                    <th>Precio</th>
+                    <th>Stock</th>
+                    <th>Última actualización</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var product in products)
+                {
+                    <tr @key="product.Id">
+                        <td>@product.Name</td>
+                        <td>@product.Sku</td>
+                        <td>@product.Price.ToString("C")</td>
+                        <td>@product.Stock</td>
+                        <td>@product.LastUpdated.ToString("g")</td>
+                        <td class="stock-actions">
+                            <button @onclick="() => DecrementStock(product)" class="stock-btn decrement"
+                                disabled="@(product.Stock <= 0)">
+                                -
+                            </button>
+                            <span class="stock-amount">@product.Stock</span>
+                            <button @onclick="() => IncrementStock(product)" class="stock-btn increment">
+                                +
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="no-products">
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <p>No se encontraron productos que coincidan con "@searchTerm"</p>
+            }
+            else
+            {
+                <p>No hay productos disponibles</p>
+            }
+        </div>
+    }
+
+    @if (showToast)
+    {
+        <div class="toast @toastClass">
+            @toastMessage
+        </div>
+    }
+}
+
+@code {
+    private List<Product>? products;
+    private string searchTerm = string.Empty;
+    private bool showToast = false;
+    private string toastMessage = string.Empty;
+    private string toastClass = string.Empty;
+    private bool isLoading = true;
+    private int counter = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Console.WriteLine("[Dashboard] OnInitializedAsync - Iniciando carga de productos");
+        try
+        {
+            await LoadProducts();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Dashboard] Error en OnInitializedAsync: {ex.Message}");
+            ShowToast($"Error al inicializar: {ex.Message}", "error");
+        }
+    }
+
+    private async Task TestConnection()
+    {
+        Console.WriteLine("[Dashboard] TestConnection - Probando conexión con API");
+        try
+        {
+            var testProducts = await ProductService.GetProductsAsync();
+            ShowToast($"Conexión exitosa. Productos encontrados: {testProducts.Count}", "success");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Dashboard] Error en TestConnection: {ex.Message}");
+            ShowToast($"Error de conexión: {ex.Message}", "error");
+        }
+    }
+
+    private void TestButton()
+    {
+        Console.WriteLine("[Dashboard] TestButton - Botón de prueba presionado");
+        ShowToast("Botón de prueba funcionando!", "success");
+    }
+
+    private void TestInlineButton()
+    {
+        Console.WriteLine("[Dashboard] TestInlineButton - Botón inline funcionando");
+        ShowToast("Botón inline funcionando!", "success");
+    }
+
+    private async Task LoadProducts(string term = "")
+    {
+        Console.WriteLine($"[Dashboard] LoadProducts - Término de búsqueda: '{term}'");
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            if (string.IsNullOrEmpty(term))
+            {
+                Console.WriteLine("[Dashboard] Haciendo GET a /api/products");
+                products = await ProductService.GetProductsAsync();
+            }
+            else
+            {
+                Console.WriteLine($"[Dashboard] Haciendo GET a /api/products/search?term={term}");
+                products = await ProductService.SearchProductsAsync(term);
+            }
+            Console.WriteLine($"[Dashboard] Productos recibidos: {products?.Count ?? 0}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Dashboard] Error en LoadProducts: {ex.Message}");
+            Console.WriteLine($"[Dashboard] Stack trace: {ex.StackTrace}");
+            ShowToast($"Error al cargar productos: {ex.Message}", "error");
+            products = new List<Product>();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleSearch(string term)
+    {
+        Console.WriteLine($"[Dashboard] HandleSearch llamado con término: '{term}'");
+        searchTerm = term;
+        await LoadProducts(term);
+    }
+
+    private async Task UpdateStock(Product product, int newStock)
+    {
+        Console.WriteLine($"[Dashboard] UpdateStock - Producto: {product.Id}, Nuevo stock: {newStock}");
+        if (newStock < 0) return;
+
+        try
+        {
+            var request = new StockUpdateRequest { NewStock = newStock };
+            Console.WriteLine($"[Dashboard] PUT a /api/products/{product.Id}/stock");
+            var success = await ProductService.UpdateStockAsync(product.Id, request);
+
+            if (success)
+            {
+                Console.WriteLine("[Dashboard] Stock actualizado correctamente");
+                product.Stock = newStock;
+                product.LastUpdated = DateTime.Now;
+                ShowToast("Stock actualizado correctamente", "success");
+                StateHasChanged();
+            }
+            else
+            {
+                Console.WriteLine("[Dashboard] Error al actualizar stock (respuesta no exitosa)");
+                ShowToast("Error al actualizar el stock", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Dashboard] Error en UpdateStock: {ex.Message}");
+            Console.WriteLine($"[Dashboard] Stack trace: {ex.StackTrace}");
+            ShowToast($"Error: {ex.Message}", "error");
+        }
+    }
+
+    private async Task IncrementStock(Product product)
+    {
+        Console.WriteLine($"[Dashboard] IncrementStock - Producto: {product.Id}, Stock actual: {product.Stock}");
+        await UpdateStock(product, product.Stock + 1);
+    }
+
+    private async Task DecrementStock(Product product)
+    {
+        Console.WriteLine($"[Dashboard] DecrementStock - Producto: {product.Id}, Stock actual: {product.Stock}");
+        if (product.Stock > 0)
+        {
+            await UpdateStock(product, product.Stock - 1);
+        }
+    }
+
+    private void ShowToast(string message, string type)
+    {
+        Console.WriteLine($"[Dashboard] Mostrando toast: {message}");
+        toastMessage = message;
+        toastClass = type;
+        showToast = true;
+
+        Task.Delay(3000).ContinueWith(_ =>
+        {
+            showToast = false;
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private void IncrementCounter()
+    {
+        counter++;
+        ShowToast($"Contador incrementado a {counter}", "success");
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Console.WriteLine("[Dashboard] Dispose - Limpiando recursos");
+    }
+}
