@@ -1,26 +1,30 @@
-﻿using System.Net.Http.Json;
+﻿using System;
+using System.Net.Http.Json;
 using Test1.Ecuanexus.Client.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Test1.Ecuanexus.Services
 {
     public class ProductService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<ProductService> _logger;
 
-        public ProductService(IHttpClientFactory httpClientFactory)
+        public ProductService(IHttpClientFactory httpClientFactory, ILogger<ProductService> logger)
         {
-            Console.WriteLine("[ProductService] Constructor - Creando HttpClient");
+            
             try
             {
                 _httpClient = httpClientFactory.CreateClient("ApiInventario");
-                Console.WriteLine($"[ProductService] BaseAddress: {_httpClient.BaseAddress}");
-                Console.WriteLine($"[ProductService] HttpClient creado exitosamente");
+                
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ProductService] Error al crear HttpClient: {ex.Message}");
                 throw;
             }
+
+            _logger = logger;
         }
 
         public async Task<List<Product>> GetProductsAsync()
@@ -28,69 +32,55 @@ namespace Test1.Ecuanexus.Services
             Console.WriteLine("[ProductService] GetProductsAsync - Iniciando");
             try
             {
-                Console.WriteLine("[ProductService] Enviando GET a /api/products");
+                
                 var response = await _httpClient.GetAsync("api/products");
-                Console.WriteLine($"[ProductService] Respuesta recibida: {response.StatusCode}");
-                Console.WriteLine($"[ProductService] Content-Type: {response.Content.Headers.ContentType}");
-
                 response.EnsureSuccessStatusCode();
 
                 var products = await response.Content.ReadFromJsonAsync<List<Product>>() ?? new List<Product>();
-                Console.WriteLine($"[ProductService] Productos recibidos: {products.Count}");
                 return products;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ProductService] Error en GetProductsAsync: {ex.Message}");
-                Console.WriteLine($"[ProductService] Stack trace: {ex.StackTrace}");
                 throw;
             }
         }
 
         public async Task<List<Product>> SearchProductsAsync(string term)
         {
-            Console.WriteLine($"[ProductService] SearchProductsAsync - Término: '{term}'");
+           
             try
             {
-                //var url = $"api/products?searchTerm={Uri.EscapeDataString(term)}";
-                //Console.WriteLine($"[ProductService] Enviando GET a {url}");
-
-                 var response = await _httpClient.GetAsync("api/products"+ $"?searchTerm={Uri.EscapeDataString(term)}");
-                Console.WriteLine($"[ProductService] Respuesta recibida: {response.StatusCode}");
-
+                var url = $"api/products?searchTerm={Uri.EscapeDataString(term)}";
+                var response = await _httpClient.GetAsync(url);
                 response.EnsureSuccessStatusCode();
 
                 var products = await response.Content.ReadFromJsonAsync<List<Product>>() ?? new List<Product>();
-                Console.WriteLine($"[ProductService] Productos encontrados: {products.Count}");
                 return products;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ProductService] Error en SearchProductsAsync: {ex.Message}");
-                Console.WriteLine($"[ProductService] Stack trace: {ex.StackTrace}");
                 throw;
             }
         }
 
-        public async Task<bool> UpdateStockAsync(int productId, StockUpdateRequest request)
+        public async Task UpdateProductStockAsync(int productId, StockUpdateRequest request)
         {
-            Console.WriteLine($"[ProductService] UpdateStockAsync - Producto: {productId}, Stock: {request.NewStock}");
             try
             {
-                var url = $"api/products/{productId}/stock";
-                Console.WriteLine($"[ProductService] Enviando PUT a {url}");
-
-                var response = await _httpClient.PostAsJsonAsync(url, request);
-                Console.WriteLine($"[ProductService] Respuesta recibida: {response.StatusCode}");
-
-                return response.IsSuccessStatusCode;
+                var url = $"api/products/{productId}/stock";               
+                var response = await _httpClient.PostAsJsonAsync(url, request);                
+                response.EnsureSuccessStatusCode();
+               
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ProductService] Error en UpdateStockAsync: {ex.Message}");
-                Console.WriteLine($"[ProductService] Stack trace: {ex.StackTrace}");
+                Console.WriteLine($"[ProductService] Error en UpdateProductStockAsync: {ex.Message}");
                 throw;
             }
         }
+
+       
     }
 }

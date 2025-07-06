@@ -1,29 +1,83 @@
-﻿@using Microsoft.AspNetCore.Components
+﻿@using Test1.Ecuanexus.Services
 @using Test1.Ecuanexus.Client.Models
-
-<div class="stock-control">
-    <button @onclick="() => UpdateStock(Product.Stock - 1)"
-            class="stock-btn decrement"
-            disabled="@(Product.Stock <= 0)">
-        -
-    </button>
-    <span class="stock-amount">@Product.Stock</span>
-    <button @onclick="() => UpdateStock(Product.Stock + 1)"
-            class="stock-btn increment">
-        +
+@inject ProductService ProductService
+@rendermode InteractiveServer
+<div class="d-flex align-items-center gap-2">
+    <div class="input-group input-group-sm" style="width: 120px;">
+            <input 
+        type="number" 
+        class="form-control form-control-sm" 
+        @bind="currentStockValue"
+        @bind:event="oninput"
+        min="0"
+        style="font-size: 0.875rem;" />
+    </div>
+    <button 
+        class="btn btn-primary btn-sm" 
+        @onclick="UpdateStock"
+        disabled="@(isUpdating || currentStockValue == CurrentStock)">
+        @if (isUpdating)
+        {
+            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+            <span>Actualizando...</span>
+        }
+        else
+        {
+            <i class="fas fa-save me-1"></i>
+            <span>Guardar</span>
+        }
     </button>
 </div>
 
 @code {
     [Parameter]
-    public Product Product { get; set; } = default!;
+    public int ProductId { get; set; }
 
     [Parameter]
-    public EventCallback<(Product Product, int NewStock)> OnStockUpdated { get; set; }
+    public int CurrentStock { get; set; }
 
-    private async Task UpdateStock(int newStock)
+    [Parameter]
+    public EventCallback<(int productId, int newStock)> OnStockUpdated { get; set; }
+
+    private int currentStockValue;
+    private bool isUpdating = false;
+
+    protected override void OnInitialized()
     {
-        if (newStock < 0) return;
-        await OnStockUpdated.InvokeAsync((Product, newStock));
+        currentStockValue = CurrentStock;
+    }
+
+    protected override void OnParametersSet()
+    {
+        currentStockValue = CurrentStock;
+    }
+
+    private async Task UpdateStock()
+    {
+        if (isUpdating || currentStockValue == CurrentStock)
+            return;
+
+        try
+        {
+            isUpdating = true;
+            StateHasChanged();
+
+            // Llamar al servicio para actualizar el stock
+            var request = new StockUpdateRequest { NewStock = currentStockValue };
+            await ProductService.UpdateProductStockAsync(ProductId, request);
+
+            await OnStockUpdated.InvokeAsync((ProductId, currentStockValue));
+        }
+        catch (Exception ex)
+        {
+            // Mostrar mensaje de error en la consola
+            Console.WriteLine($"Error al actualizar stock: {ex.Message}");
+            // Aquí podrías mostrar una notificación al usuario
+        }
+        finally
+        {
+            isUpdating = false;
+            StateHasChanged();
+        }
     }
 }
